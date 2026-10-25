@@ -66,7 +66,7 @@ jobs:
               done
             done
             if [ -z "$FOUND" ]; then
-              echo "::error::KEYSTORE_PASSWORD is wrong (${#PW} characters; should be 28). Re-copy it from KEYSTORE_PASSWORD_only.txt."
+              echo "::error::KEYSTORE_PASSWORD is wrong (${#PW} characters; should be 25). Re-copy it from KEYSTORE_PASSWORD_only.txt."
               exit 1
             fi
             echo "Found the password inside the pasted text."
