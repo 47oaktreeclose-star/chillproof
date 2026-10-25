@@ -44,34 +44,24 @@ jobs:
 
       - name: Set up release signing
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::warning::No signing secrets set. The .aab will be signed with a debug key and Google Play will reject it. See the publishing guide, Step 2."
+          # The key file is in signing/ and is locked with KEYSTORE_PASSWORD.
+          PW=$(printf '%s' "$KEYSTORE_PASSWORD" | tr -d ' \r\n\t')
+          if [ -z "$PW" ]; then
+            echo "::warning::KEYSTORE_PASSWORD secret not set. The .aab will be signed with a debug key and Google Play will reject it."
             exit 0
           fi
-          # Remove any spaces or line breaks added when the secret was pasted.
-          CLEAN=$(printf '%s' "$KEYSTORE_BASE64" | tr -d ' \r\n\t')
-          echo "KEYSTORE_BASE64 length after cleaning: ${#CLEAN} characters (expected 3512)"
-          if ! printf '%s' "$CLEAN" | base64 -d > android/app/upload-keystore.jks 2>/dev/null; then
-            echo "::error::KEYSTORE_BASE64 is not valid. Re-copy the whole long line from chillproof_signing_secrets.txt (nothing before or after it)."
-            exit 1
-          fi
-          STOREPW=$(printf '%s' "$KEYSTORE_PASSWORD" | tr -d ' \r\n\t')
-          KEYPW=$(printf '%s' "$KEY_PASSWORD" | tr -d ' \r\n\t')
-          ALIAS=$(printf '%s' "$KEY_ALIAS" | tr -d ' \r\n\t')
-          if ! keytool -list -keystore android/app/upload-keystore.jks -storepass "$STOREPW" -alias "$ALIAS" >/dev/null 2>&1; then
-            echo "::error::The keystore opened but KEYSTORE_PASSWORD or KEY_ALIAS is wrong (alias should be: upload). Re-check those secrets."
+          cp signing/upload-key.p12 android/app/upload-keystore.jks
+          if ! keytool -list -keystore android/app/upload-keystore.jks -storepass "$PW" -alias upload >/dev/null 2>&1; then
+            echo "::error::KEYSTORE_PASSWORD is wrong (${#PW} characters; should be 28). Re-copy it from KEYSTORE_PASSWORD_only.txt."
             exit 1
           fi
           {
             echo "storeFile=upload-keystore.jks"
-            echo "storePassword=$STOREPW"
-            echo "keyAlias=$ALIAS"
-            echo "keyPassword=$KEYPW"
+            echo "storePassword=$PW"
+            echo "keyAlias=upload"
+            echo "keyPassword=$PW"
           } > android/key.properties
           echo "Signing key set up OK."
 
