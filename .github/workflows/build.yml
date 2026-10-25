@@ -53,13 +53,27 @@ jobs:
             echo "::warning::No signing secrets set. The .aab will be signed with a debug key and Google Play will reject it. See the publishing guide, Step 2."
             exit 0
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          # Remove any spaces or line breaks added when the secret was pasted.
+          CLEAN=$(printf '%s' "$KEYSTORE_BASE64" | tr -d ' \r\n\t')
+          echo "KEYSTORE_BASE64 length after cleaning: ${#CLEAN} characters (expected 3512)"
+          if ! printf '%s' "$CLEAN" | base64 -d > android/app/upload-keystore.jks 2>/dev/null; then
+            echo "::error::KEYSTORE_BASE64 is not valid. Re-copy the whole long line from chillproof_signing_secrets.txt (nothing before or after it)."
+            exit 1
+          fi
+          STOREPW=$(printf '%s' "$KEYSTORE_PASSWORD" | tr -d ' \r\n\t')
+          KEYPW=$(printf '%s' "$KEY_PASSWORD" | tr -d ' \r\n\t')
+          ALIAS=$(printf '%s' "$KEY_ALIAS" | tr -d ' \r\n\t')
+          if ! keytool -list -keystore android/app/upload-keystore.jks -storepass "$STOREPW" -alias "$ALIAS" >/dev/null 2>&1; then
+            echo "::error::The keystore opened but KEYSTORE_PASSWORD or KEY_ALIAS is wrong (alias should be: upload). Re-check those secrets."
+            exit 1
+          fi
           {
             echo "storeFile=upload-keystore.jks"
-            echo "storePassword=$KEYSTORE_PASSWORD"
-            echo "keyAlias=$KEY_ALIAS"
-            echo "keyPassword=$KEY_PASSWORD"
+            echo "storePassword=$STOREPW"
+            echo "keyAlias=$ALIAS"
+            echo "keyPassword=$KEYPW"
           } > android/key.properties
+          echo "Signing key set up OK."
 
       - name: Build app bundle for Google Play (.aab)
         run: flutter build appbundle --release
