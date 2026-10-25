@@ -53,9 +53,24 @@ jobs:
             exit 0
           fi
           cp signing/upload-key.p12 android/app/upload-keystore.jks
-          if ! keytool -list -keystore android/app/upload-keystore.jks -storepass "$PW" -alias upload >/dev/null 2>&1; then
-            echo "::error::KEYSTORE_PASSWORD is wrong (${#PW} characters; should be 28). Re-copy it from KEYSTORE_PASSWORD_only.txt."
-            exit 1
+          try() { keytool -list -keystore android/app/upload-keystore.jks -storepass "$1" -alias upload >/dev/null 2>&1; }
+          if ! try "$PW"; then
+            # Extra characters were pasted: look for the 28-character password inside.
+            FOUND=""
+            for run in $(printf '%s' "$PW" | grep -oE '[A-Za-z0-9]{28,}'); do
+              n=${#run}; i=0
+              while [ $((i+28)) -le $n ]; do
+                cand=${run:$i:28}
+                if try "$cand"; then FOUND="$cand"; break 2; fi
+                i=$((i+1))
+              done
+            done
+            if [ -z "$FOUND" ]; then
+              echo "::error::KEYSTORE_PASSWORD is wrong (${#PW} characters; should be 28). Re-copy it from KEYSTORE_PASSWORD_only.txt."
+              exit 1
+            fi
+            echo "Found the password inside the pasted text."
+            PW="$FOUND"
           fi
           {
             echo "storeFile=upload-keystore.jks"
